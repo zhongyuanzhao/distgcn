@@ -1,0 +1,9 @@
+pandas
+numpy
+scipy
+networkx
+dwave_networkx
+cnfgen
+pulp
+python-igraph
+tensorflow-gpu
