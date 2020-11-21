@@ -58,4 +58,4 @@ The distributed scheduling experiment can be ran by following commands
 ```bash
 bash ./bash/test_wireless.sh
 ```
-you may change the `setval` in `./bash/test_wireless.sh` to the model you trained.
+you may change the `setval` and/or other hyperparameters in `./bash/test_wireless.sh` to the model you trained.
