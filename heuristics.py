@@ -5,7 +5,7 @@ import pulp as plp
 from pulp import GLPK
 import numpy as np
 import pandas as pd
-import scipy as sp
+import scipy.sparse as sp
 import time
 print(nx.__version__)
 
