@@ -40,7 +40,7 @@ mv ./output/mlp_gurobi_ER_Graph_Uniform_GEN21_test2.csv ./output/mlp_gurobi_ER_G
 mv ./output/mp_clique_greedy_BA_Graph_Uniform_GEN21_test2.csv ./output/mp_clique_greedy_BA_Graph_Uniform_GEN21_test2_old.csv
 mv ./output/mp_clique_greedy_ER_Graph_Uniform_GEN21_test2.csv ./output/mp_clique_greedy_ER_Graph_Uniform_GEN21_test2_old.csv
 ```
-To get the correpsonding optimal solutions from Integer Programming with Gurobi solver (follow [official doc](https://www.gurobi.com/documentation/) to install Gurobi), 
+To get the correpsonding optimal solutions from Integer Programming with Gurobi solver (follow the [official doc](https://www.gurobi.com/documentation/) to install Gurobi), 
 ```bash
 python3 mwis_mlp_test.py --datapath "./data/ER_Graph_Uniform_GEN21_test2" --solver "mlp_gurobi"
 python3 mwis_mlp_test.py --datapath "./data/BA_Graph_Uniform_GEN21_test2" --solver "mlp_gurobi"
