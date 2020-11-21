@@ -20,7 +20,7 @@ bash ./bash/generalization_dqn.sh
 1.2 Run following command to get the results in Figs. 3(a) and 3(b) based on trained models.
 ```bash
 cd icassp; # to the root of this repository
-bash ./bash/generalization_dqn_ba.sh
+bash ./bash/generalization_dqn_test.sh
 ```
 
 1.3 For the testing datasets already exist in the repository, the total utilities of optimal solutions and approximate solutions of message passing [Paschalidis'15] are in following csv files:

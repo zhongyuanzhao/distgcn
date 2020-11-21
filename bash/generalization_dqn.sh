@@ -9,12 +9,13 @@ dist='Uniform';
 for graph in 'ER' 'BA'; do	
 	setval="DGCN${graph}";
 	train_data="${graph}_Graph_${dist}_mixN_mixp_train0";
+	test_data="{graph}_Graph_${dist}_GEN21_test1";
 
 	for layers in 1 3 20; do
-		python3 mwis_dqn_origin.py --training_set=${setval} --epsilon=1 --epsilon_min=0.002 --feature_size=1 --diver_num=1 --datapath=./data/${train_data} --test_datapath=./data/ER_Graph_Uniform_GEN21_test1 --max_degree=1 --predict=mwis --learning_rate=0.00001 --hidden1=32 --num_layer=${layers} --epochs=5
-		python3 mwis_dqn_origin.py --training_set=${setval} --epsilon=0.2 --epsilon_min=0.002 --feature_size=1 --diver_num=1 --datapath=./data/${train_data} --test_datapath=./data/ER_Graph_Uniform_GEN21_test1 --max_degree=1 --predict=mwis --learning_rate=0.00001 --hidden1=32 --num_layer=${layers} --epochs=5
-		python3 mwis_dqn_origin.py --training_set=${setval} --epsilon=0.1 --epsilon_min=0.002 --feature_size=1 --diver_num=1 --datapath=./data/${train_data} --test_datapath=./data/ER_Graph_Uniform_GEN21_test1 --max_degree=1 --predict=mwis --learning_rate=0.000001 --hidden1=32 --num_layer=${layers} --epochs=5
-		python3 mwis_dqn_origin.py --training_set=${setval} --epsilon=0.05 --epsilon_min=0.002 --feature_size=1 --diver_num=1 --datapath=./data/${train_data} --test_datapath=./data/ER_Graph_Uniform_GEN21_test1 --max_degree=1 --predict=mwis --learning_rate=0.0000001 --hidden1=32 --num_layer=${layers} --epochs=10
+		python3 mwis_dqn_origin.py --training_set=${setval} --epsilon=1 --epsilon_min=0.002 --feature_size=1 --diver_num=1 --datapath=./data/${train_data} --test_datapath=./data/${test_data} --max_degree=1 --predict=mwis --learning_rate=0.00001 --hidden1=32 --num_layer=${layers} --epochs=25
+		# python3 mwis_dqn_origin.py --training_set=${setval} --epsilon=0.2 --epsilon_min=0.002 --feature_size=1 --diver_num=1 --datapath=./data/${train_data} --test_datapath=./data/${test_data} --max_degree=1 --predict=mwis --learning_rate=0.00001 --hidden1=32 --num_layer=${layers} --epochs=5
+		# python3 mwis_dqn_origin.py --training_set=${setval} --epsilon=0.1 --epsilon_min=0.002 --feature_size=1 --diver_num=1 --datapath=./data/${train_data} --test_datapath=./data/${test_data} --max_degree=1 --predict=mwis --learning_rate=0.000001 --hidden1=32 --num_layer=${layers} --epochs=5
+		# python3 mwis_dqn_origin.py --training_set=${setval} --epsilon=0.05 --epsilon_min=0.002 --feature_size=1 --diver_num=1 --datapath=./data/${train_data} --test_datapath=./data/${test_data} --max_degree=1 --predict=mwis --learning_rate=0.0000001 --hidden1=32 --num_layer=${layers} --epochs=10
 		mv result_${setval}_deep_ld1_c32_l${layers}_cheb1_diver1_mwis_dqn ./${folder}/result_${setval}_deep_ld1_c32_l${layers}_cheb1_diver1_mwis_dqn_${graph}_${dist};
 	done
 done

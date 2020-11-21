@@ -26,4 +26,16 @@ for graph in 'ER' 'BA'; do
 		python3 Data_Generation.py --datapath ./data/${testfolder} --n 20 --sizes "300" --nbs "2,5,10,15,20" --type "${graph}" --dist "${dist}" >> log_data_generation_${testfolder}.txt;
 	fi
 
+	testfolder="${graph}_Graph_${dist}_GEN21_test1";
+	if [ -d "./data/${testfolder}" ]; then
+		echo "./data/${testfolder} already exist, skip generation";
+	else
+		echo "$Start generating testing dataset: ./data/{testfolder} .";
+		python3 Data_Generation.py --datapath ./data/${testfolder} --n 2 --sizes "100" --nbs "2,5,10,15,20" --type "${graph}" --dist "${dist}" >> log_data_generation_${testfolder}.txt;
+		python3 Data_Generation.py --datapath ./data/${testfolder} --n 2 --sizes "150" --nbs "2,5,10,15,20" --type "${graph}" --dist "${dist}" >> log_data_generation_${testfolder}.txt;
+		python3 Data_Generation.py --datapath ./data/${testfolder} --n 2 --sizes "200" --nbs "2,5,10,15,20" --type "${graph}" --dist "${dist}" >> log_data_generation_${testfolder}.txt;
+		python3 Data_Generation.py --datapath ./data/${testfolder} --n 2 --sizes "250" --nbs "2,5,10,15,20" --type "${graph}" --dist "${dist}" >> log_data_generation_${testfolder}.txt;
+		python3 Data_Generation.py --datapath ./data/${testfolder} --n 2 --sizes "300" --nbs "2,5,10,15,20" --type "${graph}" --dist "${dist}" >> log_data_generation_${testfolder}.txt;
+	fi
+
 done
