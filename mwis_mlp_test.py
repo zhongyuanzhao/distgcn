@@ -10,6 +10,7 @@ sys.path.append( '%s/gcn' % os.path.dirname(os.path.realpath(__file__)) )
 # add the libary path for graph reduction and local search
 # sys.path.append( '%s/kernel' % os.path.dirname(os.path.realpath(__file__)) )
 
+import argparse
 import time
 import random
 import scipy.io as sio
@@ -33,17 +34,29 @@ from utils import *
 from test_utils import *
 from heuristics import *
 
-# flags.DEFINE_string('test_datapath', './data/ER_Graph_Uniform_NP20_test', 'test dataset')
-# flags.DEFINE_float('epsilon', 1.0, 'test dataset')
-# flags.DEFINE_float('epsilon_min', 0.001, 'test dataset')
+# Arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--datapath", default="./data/BA_Graph_Uniform_GEN21_test2", type=str, help="directory of test dataset")
+parser.add_argument("--solver", default="optimal", type=str, help="MWIS solver: optimal, mp_greedy.")
+args = parser.parse_args()
+
 # test data path
 # data_path = FLAGS.datapath
-data_path = './data/BA_Graph_Uniform_GEN21_test2'
+
+solver = args.solver.lower()
+data_path = args.datapath
+# data_path = './data/BA_Graph_Uniform_GEN21_test2'
+# data_path = './data/ER_Graph_Uniform_GEN21_test2'
 # test_datapath = FLAGS.test_datapath
 val_mat_names = sorted(os.listdir(data_path))
 # test_mat_names = sorted(os.listdir(test_datapath))
 
-model_origin = "mp_clique_greedy_"+data_path.split('/')[-1]
+if solver=='mp_greedy':
+    model_origin = "mp_clique_greedy_"+data_path.split('/')[-1]
+elif solver=='optimal':
+    model_origin = "mlp_gurobi_"+data_path.split('/')[-1]
+else:
+    raise NameError('Unsupported MWIS solver')
 
 # plp.pulpTestAll()
 
@@ -92,8 +105,13 @@ while cnt2solve:
         out_id = -1
 
         start_time = time.time()
-        solution, ss_util = mp_greedy(adj_0, wts)
-        # solution, ss_util, status = mlp_gurobi(adj_0, wts, timeout=timeout)
+        if solver=='mp_greedy':
+            solution, ss_util = mp_greedy(adj_0, wts)
+            status = ''
+        elif solver=='optimal':
+            solution, ss_util, status = mlp_gurobi(adj_0, wts, timeout=timeout)
+        else:
+            raise NameError('Unsupported solver')
 
         p_ratio = ss_util.flatten()/greedy_util.flatten()
         if p_ratio[0]==0:
@@ -126,7 +144,7 @@ while cnt2solve:
         # )
         results.loc[mat_name, 'p'] = p_ratio[0]
         results.loc[mat_name, 'runtime'] = runtime
-        # results.loc[mat_name, 'status'] = status
+        results.loc[mat_name, 'status'] = status
         # dqn_agent.save(model_origin)
         results.to_csv(outputfile)
         # sio.savemat('./%s/%s' % (outputfolder, val_mat_names[id]), {'er_graph': adj_0, 'nIS_vec': best_IS_vec, 'weights': wts, 'best_util': best_IS_util, 'yy_util': yy_util})
