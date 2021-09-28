@@ -3,12 +3,6 @@
 Zhongyuan Zhao, Gunjan Verma, Chirag Rao, Ananthram Swami, and Santiago Segarra, &quot; Distributed Scheduling using Graph Neural Networks,&quot;  IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), 2021, pp. 4720-4724, doi: [10.1109/ICASSP39728.2021.9414098](https://doi.org/10.1109/ICASSP39728.2021.9414098). 
 
 
-## Abstract
-A fundamental problem in the design of wireless networks is to efficiently schedule transmission in a distributed manner. The main challenge stems from the fact that optimal link scheduling involves solving a maximum weighted independent set (MWIS) problem, which is NP-hard. For practical link scheduling schemes, distributed greedy approaches are commonly used to approximate the solution of the MWIS problem. However, these greedy schemes mostly ignore important topological information of the wireless networks. To overcome this limitation, we propose a distributed MWIS solver based on graph convolutional networks (GCNs). In a nutshell, a trainable GCN module learns topology-aware node embeddings that are combined with the network weights before calling a greedy solver. In small- to middle-sized wireless networks with tens of links, even a shallow GCN-based MWIS scheduler can leverage the topological information of the graph to reduce in half the suboptimality gap of the distributed greedy solver with good generalizability across graphs and minimal increase in complexity.
-
-_Key words_: Maximum weighted independent set; graph convolutional network; wireless network; scheduling
-
-
 [![Watch ICASSP 2021 presentation on YouTube](https://img.youtube.com/vi/0ZzkDT5Q3Cs/0.jpg)](https://www.youtube.com/watch?v=0ZzkDT5Q3Cs)
 
 
@@ -16,6 +10,27 @@ _Key words_: Maximum weighted independent set; graph convolutional network; wire
 - [Slides](https://sigport.org/sites/default/files/docs/Zhao_ICASSP2021_0.pdf), [SigPort](https://sigport.org/documents/distributed-scheduling-using-graph-neural-networks)
 - [Source Code](https://github.com/zhongyuanzhao/distgcn/)
 - Journal version manuscript (under review): <https://arxiv.org/abs/2109.05536>
+
+
+## Abstract
+A fundamental problem in the design of wireless networks is to efficiently schedule transmission in a distributed manner. The main challenge stems from the fact that optimal link scheduling involves solving a maximum weighted independent set (MWIS) problem, which is NP-hard. For practical link scheduling schemes, distributed greedy approaches are commonly used to approximate the solution of the MWIS problem. However, these greedy schemes mostly ignore important topological information of the wireless networks. To overcome this limitation, we propose a distributed MWIS solver based on graph convolutional networks (GCNs). In a nutshell, a trainable GCN module learns topology-aware node embeddings that are combined with the network weights before calling a greedy solver. In small- to middle-sized wireless networks with tens of links, even a shallow GCN-based MWIS scheduler can leverage the topological information of the graph to reduce in half the suboptimality gap of the distributed greedy solver with good generalizability across graphs and minimal increase in complexity.
+
+_Key words_: Maximum weighted independent set; graph convolutional network; wireless network; scheduling
+
+**BibTex**
+
+```txt
+@INPROCEEDINGS{9414098,
+  author={Zhao, Zhongyuan and Verma, Gunjan and Rao, Chirag and Swami, Ananthram and Segarra, Santiago},
+  booktitle={ICASSP 2021 - 2021 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)}, 
+  title={Distributed Scheduling Using Graph Neural Networks}, 
+  year={2021},
+  volume={},
+  number={},
+  pages={4720-4724},
+  doi={10.1109/ICASSP39728.2021.9414098}}
+```
+
 
 ## Instructions for replicate numerical experiments
 The recommended system setup is Ubuntu linux 16.04LTS or 18.04LTS.
@@ -71,3 +86,5 @@ The distributed scheduling experiment can be ran by following commands
 bash ./bash/test_wireless.sh
 ```
 you may change the `setval` and/or other hyperparameters in `./bash/test_wireless.sh` to the model you trained.
+
+
