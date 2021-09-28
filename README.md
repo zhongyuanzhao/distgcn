@@ -8,12 +8,14 @@ A fundamental problem in the design of wireless networks is to efficiently sched
 
 _Key words_: Maximum weighted independent set; graph convolutional network; wireless network; scheduling
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/0ZzkDT5Q3Cs" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+[![Watch ICASSP 2021 presentation on YouTube](https://img.youtube.com/vi/0ZzkDT5Q3Cs/0.jpg)](https://www.youtube.com/watch?v=0ZzkDT5Q3Cs)
+
 
 - Full paper on [IEEEXplore](https://doi.org/10.1109/ICASSP39728.2021.9414098), _arXiv preprint_ <https://arxiv.org/abs/2011.09430>
 - [Slides](https://sigport.org/sites/default/files/docs/Zhao_ICASSP2021_0.pdf), [SigPort](https://sigport.org/documents/distributed-scheduling-using-graph-neural-networks)
 - [Source Code](https://github.com/zhongyuanzhao/distgcn/)
-- Journal version manuscript (under review): [Preprint arXiv](https://arxiv.org/abs/2109.05536)
+- Journal version manuscript (under review): <https://arxiv.org/abs/2109.05536>
 
 ## Instructions for replicate numerical experiments
 The recommended system setup is Ubuntu linux 16.04LTS or 18.04LTS.
