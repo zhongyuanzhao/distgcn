@@ -2,7 +2,8 @@ import numpy as np
 import pickle as pkl
 import networkx as nx
 import scipy.sparse as sp
-from scipy.sparse.linalg.eigen.arpack import eigsh, eigs
+# from scipy.sparse.linalg.eigen.arpack import eigsh, eigs
+from scipy.sparse.linalg import eigs, eigsh
 import sys
 import copy
 

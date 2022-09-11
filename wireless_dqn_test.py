@@ -102,7 +102,7 @@ def visual_single(results, timeslots, seed, explist):
 
 
 train = False
-n_networks = 100
+n_networks = 10
 n_instances = 10
 timeslots = 200
 if train:
@@ -126,7 +126,7 @@ load_max = 0.15
 
 res_list = []
 res_df = pd.DataFrame(columns=['seed','load','name','avg_queue_len','std_flow_q'])
-d_array = np.zeros((n_networks,), dtype=np.float)
+d_array = np.zeros((2*n_networks,), dtype=np.float)
 
 graphs_c = []
 graphs_i = []

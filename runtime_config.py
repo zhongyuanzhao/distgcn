@@ -1,6 +1,7 @@
 import tensorflow as tf
 
-flags = tf.app.flags
+flags = tf.compat.v1.flags
+# flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_string('model', 'gcn_cheby', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.001, 'Initial learning rate.')

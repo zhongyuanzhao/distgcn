@@ -28,7 +28,7 @@ import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
 
-from utils import *
+from gcn.utils import *
 # Settings (FLAGS)
 # from runtime_config import *
 from test_utils import *

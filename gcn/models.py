@@ -1,10 +1,8 @@
-from layers import *
-from metrics import *
-from layers import _LAYER_UIDS
+from .layers import *
+from .metrics import *
+from .layers import _LAYER_UIDS
 import numpy as np
 
-flags = tf.app.flags
-FLAGS = flags.FLAGS
 
 def lrelu(x):
     return tf.maximum(x*0.2,x)
@@ -48,7 +46,7 @@ class Model(object):
 
     def build(self):
         """ Wrapper for _build() """
-        with tf.variable_scope(self.name):
+        with tf.compat.v1.variable_scope(self.name):
             self._build()
 
         # Build sequential layer model
@@ -76,12 +74,12 @@ class Model(object):
         else:
             # sparse_input = tf.cast(tf.sparse.to_dense(self.inputs, default_value=0), dtype=tf.float32)
             sparse_input = tf.cast(self.inputs, dtype=tf.float32)
-            dense_input = tf.sparse_tensor_dense_matmul(sparse_input, tf.eye(self.input_dim))
+            dense_input = tf.compat.v1.sparse_tensor_dense_matmul(sparse_input, tf.eye(self.input_dim))
             # hiddens = [dense_input] + self.activations[1:]
             hiddens = [dense_input] + self.activations[-1:]
             super_hidden = tf.concat(hiddens, axis=1)
             if FLAGS.wts_init == 'random':
-                self.outputs = tf.layers.dense(super_hidden, self.activations[-1].shape[1])
+                self.outputs = tf.compat.v1.layers.dense(super_hidden, self.activations[-1].shape[1])
             elif FLAGS.wts_init == 'zeros':
                 input_dim = dense_input.get_shape().as_list()[1]
                 output_dim = self.activations[-1].shape.as_list()[1]
@@ -92,7 +90,7 @@ class Model(object):
                 pos_indices = list(range(1, output_dim, 2))
                 init_wts[0:int(output_dim/2), neg_indices] = - diag_mtx
                 init_wts[0:int(output_dim/2), pos_indices] = diag_mtx
-                self.outputs = tf.layers.dense(super_hidden, self.activations[-1].shape[1], kernel_initializer=tf.constant_initializer(init_wts))
+                self.outputs = tf.compat.v1.layers.dense(super_hidden, self.activations[-1].shape[1], kernel_initializer=tf.constant_initializer(init_wts))
         if self.name != 'gcn_dqn':
             self.outputs_softmax = tf.nn.softmax(self.outputs[:,0:2])
         if self.name == 'gcn_deep_diver':
@@ -103,7 +101,7 @@ class Model(object):
             self.outputs_softmax = self.outputs
             self.pred = tf.argmax(self.outputs)
         # Store model variables for easy access
-        variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name)
+        variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=self.name)
         self.vars = {var.name: var for var in variables}
 
         # Build metrics
@@ -137,14 +135,14 @@ class Model(object):
     def save(self, sess=None):
         if not sess:
             raise AttributeError("TensorFlow session not provided.")
-        saver = tf.train.Saver(self.vars)
+        saver = tf.compat.v1.train.Saver(self.vars)
         save_path = saver.save(sess, "tmp/%s.ckpt" % self.name)
         print("Model saved in file: %s" % save_path)
 
     def load(self, sess=None):
         if not sess:
             raise AttributeError("TensorFlow session not provided.")
-        saver = tf.train.Saver(self.vars)
+        saver = tf.compat.v1.train.Saver(self.vars)
         save_path = "tmp/%s.ckpt" % self.name
         saver.restore(sess, save_path)
         print("Model restored from file: %s" % save_path)
@@ -212,11 +210,11 @@ class GCN_DEEP_DIVER(Model):
         self.placeholders = placeholders
 
         if FLAGS.learning_decay < 1.0:
-            self.global_step_tensor = tf.get_variable('global_step', trainable=False, shape=[], initializer=tf.zeros_initializer)
-            learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, self.global_step_tensor, 1000, FLAGS.learning_decay, staircase=True)
+            self.global_step_tensor = tf.compat.v1.get_variable('global_step', trainable=False, shape=[], initializer=tf.zeros_initializer)
+            learning_rate = tf.compat.v1.train.exponential_decay(FLAGS.learning_rate, self.global_step_tensor, 1000, FLAGS.learning_decay, staircase=True)
         else:
             learning_rate = FLAGS.learning_rate
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate)
 
         self.build()
 
@@ -226,7 +224,7 @@ class GCN_DEEP_DIVER(Model):
             self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
 
         sparse_input = tf.cast(self.inputs, dtype=tf.float32)
-        dense_input = tf.sparse_tensor_dense_matmul(sparse_input, tf.eye(self.input_dim))
+        dense_input = tf.compat.v1.sparse_tensor_dense_matmul(sparse_input, tf.eye(self.input_dim))
         # 32 outputs
         # diver_loss = my_softmax_cross_entropy(self.outputs[:,0:self.output_dim], self.placeholders['labels'])
         diver_loss = my_weighted_softmax_cross_entropy(self.outputs[:,0:self.output_dim], self.placeholders['labels'], dense_input[:, 0])
@@ -304,13 +302,13 @@ class GCN_DQN(Model):
         self.placeholders = placeholders
 
         if FLAGS.learning_decay < 1.0:
-            self.global_step_tensor = tf.get_variable('global_step', trainable=False, shape=[],
+            self.global_step_tensor = tf.compat.v1.get_variable('global_step', trainable=False, shape=[],
                                                       initializer=tf.zeros_initializer)
-            learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, self.global_step_tensor, 5000,
+            learning_rate = tf.compat.v1.train.exponential_decay(FLAGS.learning_rate, self.global_step_tensor, 5000,
                                                        FLAGS.learning_decay, staircase=True)
         else:
             learning_rate = FLAGS.learning_rate
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate)
 
         self.build()
 

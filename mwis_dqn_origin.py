@@ -20,13 +20,13 @@ from copy import deepcopy
 
 import tensorflow as tf
 from collections import deque
-from models import GCN_DQN
+from gcn.models import GCN_DQN
 # import the libary for graph reduction and local search
 # from reduce_lib import reducelib
 import warnings
 warnings.filterwarnings('ignore')
 
-from utils import *
+from gcn.utils import *
 # Settings (FLAGS)
 from runtime_config import *
 from test_utils import *
@@ -162,10 +162,10 @@ class DQNAgent:
         self.epsilon_min = FLAGS.epsilon_min
         self.epsilon_decay = 0.985
         self.learning_rate = FLAGS.learning_rate
-        self.sess = tf.Session(config=config)
+        self.sess = tf.compat.v1.Session(config=config)
         self.model = self._build_model()
-        self.sess.run(tf.global_variables_initializer())
-        self.saver = tf.train.Saver(max_to_keep=1000)
+        self.sess.run(tf.compat.v1.global_variables_initializer())
+        self.saver = tf.compat.v1.train.Saver(max_to_keep=1000)
 
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
@@ -345,19 +345,19 @@ N_bd = FLAGS.feature_size
 
 # Define placeholders
 placeholders = {
-    'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
-    'features': tf.sparse_placeholder(tf.float32, shape=(None, N_bd)), # featureless: #points
-    'labels': tf.placeholder(tf.float32, shape=(None, 1)), # 0: not linked, 1:linked
-    'labels_mask': tf.placeholder(tf.int32),
-    'dropout': tf.placeholder_with_default(0., shape=()),
-    'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
+    'support': [tf.compat.v1.sparse_placeholder(tf.float32) for _ in range(num_supports)],
+    'features': tf.compat.v1.sparse_placeholder(tf.float32, shape=(None, N_bd)), # featureless: #points
+    'labels': tf.compat.v1.placeholder(tf.float32, shape=(None, 1)), # 0: not linked, 1:linked
+    'labels_mask': tf.compat.v1.placeholder(tf.int32),
+    'dropout': tf.compat.v1.placeholder_with_default(0., shape=()),
+    'num_features_nonzero': tf.compat.v1.placeholder(tf.int32)  # helper variable for sparse dropout
 }
 
 # use gpu 0
 os.environ['CUDA_VISIBLE_DEVICES'] = str(0)
 
 # Initialize session
-config = tf.ConfigProto()
+config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 
 # Create model
