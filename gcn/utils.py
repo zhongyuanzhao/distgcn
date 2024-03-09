@@ -9,6 +9,7 @@ import copy
 
 np.seterr(divide='ignore')
 
+
 def parse_index_file(filename):
     """Parse index file."""
     index = []
@@ -105,6 +106,17 @@ def preprocess_features(features):
     return sparse_to_tuple(features)
 
 
+def preprocess_features_dense(features):
+    """Column-normalize feature matrix and convert to tuple representation"""
+    batch_max = np.amax(features)
+    col_max = np.amax(features, axis=0)
+    r_inv = np.power(col_max, -1)
+    r_inv[np.isinf(r_inv)] = 0.0
+    features = np.multiply(r_inv, features)
+    # features = features/batch_max
+    return features
+
+
 def normalize_adj(adj):
     """Symmetrically normalize adjacency matrix."""
     adj = sp.coo_matrix(adj)
@@ -123,22 +135,102 @@ def preprocess_adj(adj):
     return sparse_to_tuple(adj_normalized)
 
 
-def construct_feed_dict(features, support, labels, placeholders):
+def construct_feed_dict(features, support, labels, placeholders, adj_coo=(), actions=None, mask=0, network_q=None, hidden=None):
     """Construct feed dictionary."""
     feed_dict = dict()
     feed_dict.update({placeholders['labels']: labels})
     feed_dict.update({placeholders['features']: features})
     feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
+    if sp.isspmatrix(adj_coo):
+        feed_dict.update({placeholders['adj']: sparse_to_tuple(adj_coo)})
+    if actions is not None:
+        feed_dict.update({placeholders['actions']: actions})
+    if network_q is not None:
+        feed_dict.update({placeholders['network_q']: network_q})
+    if hidden is not None:
+        feed_dict.update({placeholders['hidden']: hidden})
+    feed_dict.update({placeholders['labels_mask']: mask})
     feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
     return feed_dict
 
-def construct_feed_dict4pred(features, support, placeholders):
+
+def construct_feed_dict4pred(features, support, placeholders, adj_coo=(), hidden=None):
     """Construct feed dictionary."""
     feed_dict = dict()
     feed_dict.update({placeholders['features']: features})
     feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
+    if sp.isspmatrix(adj_coo):
+        feed_dict.update({placeholders['adj']: sparse_to_tuple(adj_coo)})
+    if hidden is not None:
+        feed_dict.update({placeholders['hidden']: hidden})
+    feed_dict.update({placeholders['labels_mask']: 1})
     feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
     return feed_dict
+
+def construct_feed_dict_kf(features, support, labels, greedy, reward, placeholders, adj_coo):
+    """Construct feed dictionary."""
+    feed_dict = dict()
+    feed_dict.update({placeholders['labels']: labels})
+    feed_dict.update({placeholders['greedy']: greedy})
+    feed_dict.update({placeholders['reward']: reward})
+    feed_dict.update({placeholders['features']: features})
+    feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
+    feed_dict.update({placeholders['adj']: sparse_to_tuple(adj_coo)})
+    feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    return feed_dict
+
+def construct_feed_dict_mv(features, support, support_cc, labels, placeholders, adj_coo):
+    """Construct feed dictionary."""
+    feed_dict = dict()
+    feed_dict.update({placeholders['labels']: labels})
+    feed_dict.update({placeholders['features']: features})
+    feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
+    feed_dict.update({placeholders['support_cc'][i]: support_cc[i] for i in range(len(support_cc))})
+    feed_dict.update({placeholders['adj'][i]: sparse_to_tuple(adj_coo[i]) for i in range(len(adj_coo))})
+    feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    return feed_dict
+
+def construct_feed_dict4pred_mv(features, support, support_cc, placeholders, adj_coo):
+    """Construct feed dictionary."""
+    feed_dict = dict()
+    feed_dict.update({placeholders['features']: features})
+    feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
+    feed_dict.update({placeholders['support_cc'][i]: support_cc[i] for i in range(len(support_cc))})
+    feed_dict.update({placeholders['adj'][i]: sparse_to_tuple(adj_coo[i]) for i in range(len(adj_coo))})
+    feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    return feed_dict
+
+def construct_feed_dict_pgc(features, support, action, reward, placeholders, adj_coo):
+    """Construct feed dictionary."""
+    feed_dict = dict()
+    feed_dict.update({placeholders['action']: action})
+    feed_dict.update({placeholders['reward']: reward})
+    feed_dict.update({placeholders['features']: features})
+    feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
+    feed_dict.update({placeholders['adj']: sparse_to_tuple(adj_coo)})
+    feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    return feed_dict
+
+def construct_feed_dict4pred_pgc(features, support, placeholders, adj_coo):
+    """Construct feed dictionary."""
+    feed_dict = dict()
+    feed_dict.update({placeholders['features']: features})
+    feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
+    feed_dict.update({placeholders['adj']: sparse_to_tuple(adj_coo)})
+    feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    return feed_dict
+
+def construct_feed_dict_crl(features, support, act_labels, crt_labels, placeholders):
+    """Construct feed dictionary."""
+    feed_dict = dict()
+    feed_dict.update({placeholders['act_labels']: act_labels})
+    feed_dict.update({placeholders['crt_labels']: crt_labels})
+    feed_dict.update({placeholders['features']: features})
+    feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
+    # feed_dict.update({placeholders['adj']: adj_coo})
+    feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    return feed_dict
+
 
 def chebyshev_polynomials(adj, k):
     """Calculate Chebyshev polynomials up to order k. Return a list of sparse matrices (tuple representation)."""
@@ -162,6 +254,7 @@ def chebyshev_polynomials(adj, k):
 
     return sparse_to_tuple(t_k)
 
+
 def simple_polynomials(adj, k):
     """Calculate polynomials up to order k. Return a list of sparse matrices (tuple representation)."""
     # print("Calculating polynomials up to order {}...".format(k))
@@ -181,6 +274,44 @@ def simple_polynomials(adj, k):
     return sparse_to_tuple(t_k)
 
 
+def simple_polynomials_dense(adj, k):
+    """Calculate polynomials up to order k. Return a list of sparse matrices (tuple representation)."""
+    # print("Calculating polynomials up to order {}...".format(k))
+
+    adj_normalized = normalize_adj(adj)
+    laplacian = sp.eye(adj.shape[0]) - adj_normalized
+    # laplacian = symmetric_graph_laplacian(adj)
+
+    t_k = list()
+    t_k.append(sp.eye(adj.shape[0]).todense())
+    t_k.append(laplacian.todense())
+
+    for i in range(2, k+1):
+        t_new = t_k[-1]*laplacian
+        t_k.append(t_new)
+
+    return t_k
+
+
+def simple_polynomials_sparse(adj, k):
+    """Calculate polynomials up to order k. Return a list of sparse matrices (tuple representation)."""
+    # print("Calculating polynomials up to order {}...".format(k))
+
+    adj_normalized = normalize_adj(adj)
+    laplacian = sp.eye(adj.shape[0]) - adj_normalized
+    # laplacian = symmetric_graph_laplacian(adj)
+
+    t_k = list()
+    t_k.append(sp.eye(adj.shape[0]))
+    t_k.append(laplacian)
+
+    for i in range(2, k+1):
+        t_new = t_k[-1]*laplacian
+        t_k.append(t_new)
+
+    return t_k
+
+
 def dstack(adj1, adj2):
     shape1 = adj1.get_shape()
     shape2 = adj2.get_shape()
@@ -190,35 +321,20 @@ def dstack(adj1, adj2):
     adj_low = sp.hstack([pad1, adj2])
     return sp.vstack([adj_high, adj_low])
 
-class MiniBatch:
-    def __init__(self, batch_size):
-        self.adj_batch = None
-        self.wts_batch = None
-        self.ytrain_batch = None
-        self.nn_sum = 0
-        self.batch_count = 0
-        self.batch_size = batch_size
 
-    def mini_batch(self, adj, wts, y_train, nn):
-        if self.batch_count == 0:
-            self.adj_batch = copy.deepcopy(adj)
-            self.wts_batch = copy.deepcopy(wts)
-            self.ytrain_batch = copy.deepcopy(y_train)
-            self.nn_sum = copy.deepcopy(nn)
-            self.batch_count = 1
-        elif self.batch_count < self.batch_size:
-            self.adj_batch = dstack(self.adj_batch, adj)
-            self.wts_batch = np.concatenate((self.wts_batch, wts), axis=0)
-            self.ytrain_batch = np.concatenate((self.ytrain_batch, y_train), axis=0)
-            self.nn_sum += nn
-            self.batch_count += 1
+def plain_polynomials(adj, k):
+    """Calculate polynomials up to order k. Return a list of sparse matrices (tuple representation)."""
+    # print("Calculating polynomials up to order {}...".format(k))
 
-    def ready(self):
-        if self.batch_count < self.batch_size:
-            return False
-        else:
-            return True
+    laplacian = sp.eye(adj.shape[0]) - adj
+    # laplacian = symmetric_graph_laplacian(adj)
 
-    def getbatch(self):
-        self.batch_count = 0
-        return self.adj_batch, self.wts_batch, self.ytrain_batch, self.nn_sum
+    t_k = list()
+    t_k.append(sp.eye(adj.shape[0]))
+    t_k.append(laplacian)
+
+    for i in range(2, k+1):
+        t_new = t_k[-1]*laplacian
+        t_k.append(t_new)
+
+    return sparse_to_tuple(t_k)

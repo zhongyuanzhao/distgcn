@@ -27,3 +27,8 @@ flags.DEFINE_bool('skip', False, 'If skip connection included')
 flags.DEFINE_string('wts_init', 'random', 'how to initialize the weights of GCN')
 flags.DEFINE_string('snapshot', '', 'snapshot of model')
 flags.DEFINE_string('predict', 'mwis', 'direct output: mwis, linear combination: mis')
+
+flags.DEFINE_float('epsilon', 1.0, 'initial exploration rate')
+flags.DEFINE_float('epsilon_min', 0.001, 'minimal exploration rate')
+flags.DEFINE_float('epsilon_decay', 0.985, 'exploration rate decay per replay')
+flags.DEFINE_float('gamma', 1.0, 'gamma')

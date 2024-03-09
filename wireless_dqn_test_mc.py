@@ -34,7 +34,7 @@ flags.DEFINE_float('load_min', 0.1, 'traffic load min')
 flags.DEFINE_float('load_max', 1.0, 'traffic load max')
 flags.DEFINE_float('load_step', 0.1, 'traffic load step')
 flags.DEFINE_integer('instances', 10, 'number of layers.')
-flags.DEFINE_integer('num_channels', 1, 'number of channels')
+flags.DEFINE_integer('num_channels', 3, 'number of channels')
 flags.DEFINE_integer('opt', 0, 'test algorithm')
 
 from mwis_dqn_call import dqn_agent
@@ -64,7 +64,7 @@ if train:
 else:
     # algolist = ['Greedy', 'DGCN-LGS']
     algoname = 'DGCN-LGS'
-    algolist = ['Greedy', 'DGCN-LGS', 'Benchmark']
+    algolist = ['Greedy', algoname, 'Benchmark']
     if flags.FLAGS.opt == 0:
         algoname = 'DGCN-LGS'
     elif flags.FLAGS.opt == 1:
@@ -76,6 +76,15 @@ else:
     elif flags.FLAGS.opt == 3:
         algoname = 'CGCN-CGS'
         algolist = [algoname]
+    elif flags.FLAGS.opt == 5:
+        algoname = 'DGCN-LGS-Seq'
+        algolist = [algoname]
+    elif flags.FLAGS.opt == 6:
+        algoname = 'CGCN-RS-Seq'
+        algolist = [algoname]
+    elif flags.FLAGS.opt == 7:
+        algoname = 'LGS-Seq'
+        algolist = [algoname]
     else:
         sys.exit("Unsupported opt {}".format(flags.FLAGS.opt))
 
@@ -83,7 +92,7 @@ sim_area = 250
 sim_node = 100
 sim_rc = 1
 sim_ri = 4
-n_ch = 1
+n_ch = flags.FLAGS.num_channels
 p_overlap = 0.8
 # link rate high and low bound (number of packets per time slot)
 sim_rate_hi = 100
@@ -147,8 +156,9 @@ for idx in range(0, len(val_mat_names[0:20])):
     mat_contents = sio.loadmat(os.path.join(datapath, val_mat_names[idx]))
     gdict = mat_contents['gdict'][0, 0]
     seed = mat_contents['random_seed'][0, 0]
-    graph_c, graph_i = poisson_graphs_from_dict(gdict)
-    adj_gK = nx.adjacency_matrix(graph_i)
+    graph_c = connection_graph_poisson(gdict['adj_c'], gdict['xys'])
+    graphs_i = multichannel_conflict_simulate(gdict['adj_i'], n_ch, p_overlap)
+    adj_list, adj_gK = multichannel_conflict_graph(graphs_i)
 
     flows = [e for e in graph_c.edges]
     # flows_r = [(e[1], e[0]) for e in graph_c.edges]
@@ -157,13 +167,13 @@ for idx in range(0, len(val_mat_names[0:20])):
     netcfg = "Config: s {}, n {}, f {}, t {}".format(seed, sim_node, nflows, timeslots)
 
     d_list = []
-    for v in graph_i:
-        d_list.append(graph_i.degree[v])
+    for gi in graphs_i:
+        for v in gi:
+            d_list.append(gi.degree[v])
     avg_degree = np.nanmean(d_list)
 
-    i = 0
     # for i in range(1, n_instances+1):
-    for i in range(0, load_array.size):
+    for i in range(0,load_array.size):
         load = load_array[i]
         treeseed = i
         np.random.seed(treeseed)
@@ -263,7 +273,7 @@ for idx in range(0, len(val_mat_names[0:20])):
                     wts_dict[algo] = wts1
                     mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
                     mwis, total_wt = dqn_agent.solve_mwis_cgs_train(adj_gK, wts_dict[algo], train=train,
-                                                                    grd=total_wt0)
+                                                                       grd=total_wt0)
                     util_mtx_dict[algo][t] = total_wt / total_wt0
                 elif algo == 'DGCN-LGS':
                     # weight_samples += list(wts)
@@ -279,6 +289,69 @@ for idx in range(0, len(val_mat_names[0:20])):
                     mwis, total_wt = dqn_agent.solve_mwis(adj_gK, wts_dict[algo], train=train, grd=total_wt0)
                     # mwis, total_wt, reward = dqn_agent.solve_mwis(adj, wts, train=train)
                     util_mtx_dict[algo][t] = total_wt/total_wt0
+                elif algo == 'LGS-Seq':
+                    wts_dict[algo] = wts1
+                    assert wt_sel == 'qr'
+                    mwis = set()
+                    for ic in range(n_ch):
+                        # mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
+                        wts_ic = queue_mtx_algo[:, ic] * link_rates[t, :, ic]
+                        wts_idx, = np.nonzero(wts_ic)
+                        adj_ic = adj_list[ic]
+                        adj_ii = adj_ic[wts_idx, :][:, wts_idx]
+                        mwis_c, _ = local_greedy_search(adj_ii, wts_ic[wts_idx])
+                        mwis_ic = np.array(wts_idx[list(mwis_c)]) + ic * nflows
+                        mwis_ic = set(mwis_ic.flatten())
+                        mwis = mwis.union(mwis_ic)
+                        if ic + 1 < n_ch:
+                            mwis_ls = wts_idx[list(mwis_c)]
+                            depart_est = np.minimum(queue_mtx_algo[:, ic], link_rates[t, :, ic])
+                            queue_mtx_algo[:, ic + 1] = queue_mtx_algo[:, ic]
+                            queue_mtx_algo[mwis_ls, ic + 1] -= depart_est[mwis_ls]
+                    # mwis, total_wt, reward = dqn_agent.solve_mwis(adj, wts, train=train)
+                    util_mtx_dict[algo][t] = 1
+                elif algo == 'DGCN-LGS-Seq':
+                    wts_dict[algo] = wts1
+                    assert wt_sel == 'qr'
+                    mwis = set()
+                    for ic in range(n_ch):
+                        # mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
+                        wts_ic = queue_mtx_algo[:, ic] * link_rates[t, :, ic]
+                        wts_idx, = np.nonzero(wts_ic)
+                        adj_ic = adj_list[ic]
+                        adj_ii = adj_ic[wts_idx, :][:, wts_idx]
+                        mwis_c, _ = dqn_agent.solve_mwis(adj_ii, wts_ic[wts_idx], train=train, grd=100.0)
+                        mwis_ic = np.array(wts_idx[list(mwis_c)]) + ic * nflows
+                        mwis_ic = set(mwis_ic.flatten())
+                        mwis = mwis.union(mwis_ic)
+                        if ic+1 < n_ch:
+                            mwis_ls = wts_idx[list(mwis_c)]
+                            depart_est = np.minimum(queue_mtx_algo[:, ic], link_rates[t, :, ic])
+                            queue_mtx_algo[:, ic + 1] = queue_mtx_algo[:, ic]
+                            queue_mtx_algo[mwis_ls, ic + 1] -= depart_est[mwis_ls]
+                    # mwis, total_wt, reward = dqn_agent.solve_mwis(adj, wts, train=train)
+                    util_mtx_dict[algo][t] = 1
+                elif algo == 'CGCN-RS-Seq':
+                    wts_dict[algo] = wts1
+                    assert wt_sel == 'qr'
+                    mwis = set()
+                    for ic in range(n_ch):
+                        # mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
+                        wts_ic = queue_mtx_algo[:, ic] * link_rates[t, :, ic]
+                        wts_idx, = np.nonzero(wts_ic)
+                        adj_ic = adj_list[ic]
+                        adj_ii = adj_ic[wts_idx, :][:, wts_idx]
+                        mwis_c, _ = dqn_agent.solve_mwis_rollout_wrap(adj_ii, wts_ic[wts_idx], train=train, grd=100.0)
+                        mwis_ic = np.array(wts_idx[list(mwis_c)]) + ic * nflows
+                        mwis_ic = set(mwis_ic.flatten())
+                        mwis = mwis.union(mwis_ic)
+                        if ic + 1 < n_ch:
+                            mwis_ls = wts_idx[list(mwis_c)]
+                            depart_est = np.minimum(queue_mtx_algo[:, ic], link_rates[t, :, ic])
+                            queue_mtx_algo[:, ic + 1] = queue_mtx_algo[:, ic]
+                            queue_mtx_algo[mwis_ls, ic + 1] -= depart_est[mwis_ls]
+                    # mwis, total_wt, reward = dqn_agent.solve_mwis(adj, wts, train=train)
+                    util_mtx_dict[algo][t] = 1
                 else:
                     sys.exit("Unsupported opt {}".format(flags.FLAGS.opt))
 
@@ -336,12 +409,12 @@ for idx in range(0, len(val_mat_names[0:20])):
         res_df.to_csv(output_csv)
         # with open(wts_sample_file,'a') as f:
         #     f.write('{}'.format(weight_samples))
-        if train:
-            loss = dqn_agent.replay(199)
-            if loss is None:
-                loss = 1.0
-            if not np.isnan(loss):
-                dqn_agent.save(model_origin)
+        # if train:
+        #     loss = dqn_agent.replay(199)
+        #     if loss is None:
+        #         loss = 1.0
+        #     if not np.isnan(loss):
+        #         dqn_agent.save(model_origin)
         # else:
         #     dqn_agent.load(model_origin)
         #

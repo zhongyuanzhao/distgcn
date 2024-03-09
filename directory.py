@@ -1,6 +1,7 @@
 import os
 import numpy as np
 
+
 def create_result_folder(FLAGS, postfix):
     # test data path
     data_path = FLAGS.datapath
@@ -28,10 +29,12 @@ def create_result_folder(FLAGS, postfix):
         os.makedirs(outputfolder)
     return outputfolder
 
+
 def find_model_folder(FLAGS, postfix):
     # Copy trained model to /model
     model_origin = "result_{}_deep_ld{}_c{}_l{}_cheb{}_diver{}_{}_{}".format(FLAGS.training_set, FLAGS.feature_size, FLAGS.hidden1, FLAGS.num_layer, FLAGS.max_degree, FLAGS.diver_num, FLAGS.predict, postfix)
     model_origin = os.path.join('./model', model_origin)
-    if not FLAGS.snapshot == "":
-        model_origin = os.path.join(model_origin, FLAGS.snapshot)
+    if hasattr(FLAGS, 'snapshot'):
+        if not FLAGS.snapshot == "":
+            model_origin = os.path.join(model_origin, FLAGS.snapshot)
     return model_origin

@@ -16,6 +16,7 @@ import dwave_networkx as dnx
 import sys
 import os
 sys.path.append( '%s/gcn' % os.path.dirname(os.path.realpath(__file__)) )
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 from itertools import chain, combinations
 from heuristics import greedy_search, dist_greedy_search, local_greedy_search, mlp_gurobi
@@ -37,16 +38,16 @@ flags.DEFINE_integer('instances', 10, 'number of layers.')
 flags.DEFINE_integer('num_channels', 1, 'number of channels')
 flags.DEFINE_integer('opt', 0, 'test algorithm')
 
-from mwis_dqn_call import dqn_agent
-# from mwis_dqn_tree_call import DQNAgent
-# dqn_agent = DQNAgent(flags.FLAGS, 5000)
+# from mwis_dqn_call import dqn_agent
+from mwis_rollout_call import rollout_agent
 from directory import find_model_folder
 model_origin = find_model_folder(flags.FLAGS, 'dqn')
-# model_origin = find_model_folder(flags.FLAGS, 'dqn_crs')
-dqn_agent.load(model_origin)
+
+# dqn_agent.load(model_origin)
+
+rollout_agent.load(os.path.join('result_ERUNI_deep_ld32_c32_l20_cheb1_diver32_res32'))
 
 n_instances = flags.FLAGS.instances
-
 
 def emv(samples, pemv, n=3):
     assert samples.size == pemv.size
@@ -59,22 +60,22 @@ n_networks = 500
 # n_instances = 10
 timeslots = 200
 if train:
-    # algolist = ['DGCN-LGS']
-    algolist = ['Greedy', 'DGCN-LGS']
+    # algolist = ['GCNr-Dist']
+    algolist = ['Greedy', 'CGCN-RS']
 else:
     # algolist = ['Greedy', 'DGCN-LGS']
-    algoname = 'DGCN-LGS'
-    algolist = ['Greedy', 'DGCN-LGS', 'Benchmark']
+    algoname = 'CGCN-RS'
+    algolist = ['Greedy', algoname, 'Benchmark']
     if flags.FLAGS.opt == 0:
         algoname = 'DGCN-LGS'
     elif flags.FLAGS.opt == 1:
         algoname = 'DGCN-LGS-it'
         algolist = [algoname]
-    elif flags.FLAGS.opt == 2 or flags.FLAGS.opt == 4:
+    elif flags.FLAGS.opt == 2:
         algoname = 'DGCN-RS'
         algolist = [algoname]
     elif flags.FLAGS.opt == 3:
-        algoname = 'CGCN-CGS'
+        algoname = 'CGCN-RS'
         algolist = [algoname]
     else:
         sys.exit("Unsupported opt {}".format(flags.FLAGS.opt))
@@ -98,7 +99,7 @@ wt_sel = flags.FLAGS.wt_sel
 
 output_dir = flags.FLAGS.output
 output_csv = os.path.join(output_dir,
-                          'metric_vs_load_summary_{}-channel_utility-{}_opt-{}_load-{:.1f}-{:.1f}.csv'
+                          'metric_vs_load_summary_{}-channel_utility-{}_opt-{}_load-{:.1f}-{:.1f}_rollout.csv'
                           .format(n_ch, wt_sel, flags.FLAGS.opt, load_min, load_max)
                           )
 
@@ -259,12 +260,6 @@ for idx in range(0, len(val_mat_names[0:20])):
                     mwis, total_wt = dqn_agent.solve_mwis_rollout_wrap(adj_gK, wts_dict[algo], train=train,
                                                                        grd=total_wt0)
                     util_mtx_dict[algo][t] = total_wt / total_wt0
-                elif algo == 'CGCN-CGS':
-                    wts_dict[algo] = wts1
-                    mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
-                    mwis, total_wt = dqn_agent.solve_mwis_cgs_train(adj_gK, wts_dict[algo], train=train,
-                                                                    grd=total_wt0)
-                    util_mtx_dict[algo][t] = total_wt / total_wt0
                 elif algo == 'DGCN-LGS':
                     # weight_samples += list(wts)
                     # wts0 = queue_mtx_dict[algo][:, t] + link_rates[:, t]
@@ -277,6 +272,16 @@ for idx in range(0, len(val_mat_names[0:20])):
                     # mwis0, total_wt0 = greedy_search(adj_gK, wts1)
                     mwis0, total_wt0,_ = mlp_gurobi(adj_gK, wts1)
                     mwis, total_wt = dqn_agent.solve_mwis(adj_gK, wts_dict[algo], train=train, grd=total_wt0)
+                    # mwis, total_wt, reward = dqn_agent.solve_mwis(adj, wts, train=train)
+                    util_mtx_dict[algo][t] = total_wt/total_wt0
+                elif algo == 'CGCN-RS':
+                    wts_dict[algo] = wts1
+                    # wts = emv(wts0, wts)
+                    # wts_dict[algo] = emv(wts0, wts_dict[algo])
+                    # mwis0, total_wt0 = local_greedy_search(adj, wts_dict[algo])
+                    # mwis0, total_wt0 = greedy_search(adj_gK, wts1)
+                    mwis0, total_wt0,_ = mlp_gurobi(adj_gK, wts1)
+                    mwis, total_wt = rollout_agent.solve_mwis_iterative(adj_gK, wts_dict[algo])
                     # mwis, total_wt, reward = dqn_agent.solve_mwis(adj, wts, train=train)
                     util_mtx_dict[algo][t] = total_wt/total_wt0
                 else:
@@ -336,12 +341,12 @@ for idx in range(0, len(val_mat_names[0:20])):
         res_df.to_csv(output_csv)
         # with open(wts_sample_file,'a') as f:
         #     f.write('{}'.format(weight_samples))
-        if train:
-            loss = dqn_agent.replay(199)
-            if loss is None:
-                loss = 1.0
-            if not np.isnan(loss):
-                dqn_agent.save(model_origin)
+        # if train:
+        #     loss = dqn_agent.replay(199)
+        #     if loss is None:
+        #         loss = 1.0
+        #     if not np.isnan(loss):
+        #         dqn_agent.save(model_origin)
         # else:
         #     dqn_agent.load(model_origin)
         #
@@ -363,7 +368,7 @@ for idx in range(0, len(val_mat_names[0:20])):
                 "u_gdy: {:.3f}, ".format(np.mean(util_mtx_dict['Greedy'])),
                 "u_gcn: {:.3f}, ".format(np.mean(util_mtx_dict[algoname])),
                 "run: {:.3f}s, loss: {:.5f}, ratio: {:.3f}, ".format(runtime, loss, np.mean(buffer)),
-                "e: {:.4f}, m_val: {:.4f}, m_len: {}".format(dqn_agent.epsilon, np.mean(dqn_agent.reward_mem), len(dqn_agent.reward_mem))
+                # "e: {:.4f}, m_val: {:.4f}, m_len: {}".format(rollout_agent.epsilon, np.mean(rollout_agent.reward_mem), len(rollout_agent.reward_mem))
                 )
         # else:
         #     print("{}: {}, load: {}, ".format(i, netcfg, load),

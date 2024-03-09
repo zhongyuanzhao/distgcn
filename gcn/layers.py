@@ -32,6 +32,27 @@ def dot(x, y, sparse=False):
     return res
 
 
+def maxpooling(x, y, sparse=False):
+    """Wrapper for tf.matmul (sparse vs dense)."""
+    featuresize = y.shape[1]
+    res_cols = []
+    if sparse:
+        for i in range(featuresize):
+            diag = tf.compat.v1.diag(y[:,i])
+            imtx = tf.compat.v1.sparse_tensor_dense_matmul(x, diag)
+            icol = tf.reduce_max(imtx, axis=1)
+            res_cols.append(icol)
+        res = tf.reshape(tf.concat(res_cols, axis=0),(-1,featuresize))
+    else:
+        for i in range(featuresize):
+            diag = tf.compat.v1.diag(y[:,i])
+            imtx = tf.matmul(x, diag)
+            icol = tf.reduce_max(imtx, axis=1)
+            res_cols.append(icol)
+        res = tf.reshape(tf.concat(res_cols, axis=0),(-1,featuresize))
+    return res
+
+
 class Layer(object):
     """Base layer class. Defines basic API for all layer objects.
     Implementation inspired by keras (http://keras.io).
@@ -127,7 +148,7 @@ class Dense(Layer):
 
 class GraphConvolution(Layer):
     """Graph convolution layer."""
-    def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
+    def __init__(self, input_dim, output_dim, placeholders, dropout=0., channel=0, num_channels=1,
                  sparse_inputs=False, act=tf.nn.relu, bias=False,
                  featureless=False, **kwargs):
         super(GraphConvolution, self).__init__(**kwargs)
@@ -138,10 +159,13 @@ class GraphConvolution(Layer):
             self.dropout = 0.
 
         self.act = act
-        self.support = placeholders['support']
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
+        self.channel = int(channel)
+        self.num_channels = int(num_channels)
+        self.order = int(len(placeholders['support']) / self.num_channels)
+        self.support = placeholders['support'][self.channel * self.order: self.channel*self.order+self.order]
 
         # helper variable for sparse dropout
         self.num_features_nonzero = placeholders['num_features_nonzero']
@@ -190,3 +214,6 @@ class GraphConvolution(Layer):
         # concated = tf.concat([output, self.act(output)], axis=1)
         # return tf.layers.dense(concated, output.shape[1])
         return self.act(output)
+
+
+

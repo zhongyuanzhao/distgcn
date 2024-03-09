@@ -1,9 +1,12 @@
 pandas
 numpy
 scipy
-networkx
+networkx==2.6.2
 dwave_networkx
 cnfgen
 pulp
 python-igraph
-tensorflow-gpu
+tensorflow
+seaborn
+natsort
+spektral

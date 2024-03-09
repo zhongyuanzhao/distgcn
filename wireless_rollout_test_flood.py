@@ -13,20 +13,17 @@ from copy import deepcopy
 from scipy.io import savemat
 from scipy.spatial import distance_matrix
 import dwave_networkx as dnx
-import sys
 import os
-sys.path.append( '%s/gcn' % os.path.dirname(os.path.realpath(__file__)) )
-
 from itertools import chain, combinations
 from heuristics import greedy_search, dist_greedy_search, local_greedy_search, mlp_gurobi
+
 # visualization
 import matplotlib.pyplot as plt
 # This import registers the 3D projection, but is otherwise unused.
-# from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
-from graph_util import *
-from test_utils import *
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 
 from runtime_config import flags
+
 flags.DEFINE_string('output', 'wireless', 'output folder')
 flags.DEFINE_string('test_datapath', './data/ER_Graph_Uniform_NP20_test', 'test dataset')
 flags.DEFINE_string('wt_sel', 'qr', 'qr: queue length * rate, q/r: q/r, q: queue length only, otherwise: random')
@@ -35,18 +32,17 @@ flags.DEFINE_float('load_max', 1.0, 'traffic load max')
 flags.DEFINE_float('load_step', 0.1, 'traffic load step')
 flags.DEFINE_integer('instances', 10, 'number of layers.')
 flags.DEFINE_integer('num_channels', 1, 'number of channels')
-flags.DEFINE_integer('opt', 0, 'test algorithm')
 
-from mwis_dqn_call import dqn_agent
-# from mwis_dqn_tree_call import DQNAgent
-# dqn_agent = DQNAgent(flags.FLAGS, 5000)
-from directory import find_model_folder
+# from mwis_dqn_call import dqn_agent
+from mwis_rollout_call import rollout_agent
+from directory import create_result_folder, find_model_folder
 model_origin = find_model_folder(flags.FLAGS, 'dqn')
-# model_origin = find_model_folder(flags.FLAGS, 'dqn_crs')
-dqn_agent.load(model_origin)
+
+# dqn_agent.load(model_origin)
+
+rollout_agent.load(os.path.join('result_ERUNI_deep_ld32_c32_l20_cheb1_diver32_res32'))
 
 n_instances = flags.FLAGS.instances
-
 
 def emv(samples, pemv, n=3):
     assert samples.size == pemv.size
@@ -54,31 +50,101 @@ def emv(samples, pemv, n=3):
     return samples * k + pemv * (1-k)
 
 
+def poisson_graphs_from_dict(gdict):
+    adj_c = gdict['adj_c']
+    adj_i = gdict['adj_i']
+    # d_mtx = gdict['d_mtx']
+    xys = gdict['xys']
+
+    # generate connectivity graph
+    np.fill_diagonal(adj_c, 0)
+    graph_c = nx.from_numpy_matrix(adj_c)
+    for u in graph_c:
+        graph_c.nodes[u]['xy'] = xys[u, :]
+
+    # generate conflict graph
+    graph_cf = nx.from_numpy_matrix(adj_i)
+
+    return graph_c, graph_cf
+
+
+def poisson_multigraphs_from_dict(gdict, k=3, p=0.8):
+    adj_c = gdict['adj_c']
+    adj_i = gdict['adj_i']
+    # d_mtx = gdict['d_mtx']
+    xys = gdict['xys']
+
+    # generate connectivity graph
+    np.fill_diagonal(adj_c, 0)
+    graph_c = nx.from_numpy_matrix(adj_c)
+    for u in graph_c:
+        graph_c.nodes[u]['xy'] = xys[u, :]
+
+    # generate conflict graph
+    graphs_cf = []
+    for c in range(k):
+        graph_cf = nx.from_numpy_matrix(adj_i)
+        for u in graph_cf:
+            for v in graph_cf:
+                if u <= v:
+                    continue
+                if adj_i[u, v]:
+                    if np.random.rand() > p:
+                        graph_cf.remove_edge(u, v)
+        graphs_cf.append(graph_cf)
+    return graph_c, graphs_cf
+
+
+def multichannel_conflict_graph(graphs):
+    # for multiGCN inputs
+    adj_list = []
+    # for centralized scheduling
+    graph_K = nx.Graph()
+    nk = len(graphs)
+    no_nodes = []
+    for k in range(nk):
+        g = graphs[k]
+        iu = 0
+        no_nodes.append(g.number_of_nodes())
+        for u in g:
+            j = k * no_nodes[-1] + iu
+            graph_K.add_node(j, weight=1.0, name='({},{})'.format(iu, k))
+            iu += 1
+    assert(len(set(no_nodes)) == 1)
+    nn = no_nodes[0]
+    # add interface constraint for single radio
+    for n in range(nn):
+        for k1 in range(nk):
+            v1 = k1*nn + n
+            for k2 in range(nk):
+                if k1 >= k2:
+                    continue
+                v2 = k2*nn + n
+                graph_K.add_edge(v1, v2)
+    for k in range(nk):
+        g = graphs[k]
+        adj = nx.adjacency_matrix(g)
+        adj_list.append(adj)
+        for e in g.edges:
+            v1, v2 = e
+            graph_K.add_edge(k*nn+v1, k*nn+v2)
+
+    adj_gK = nx.adjacency_matrix(graph_K)
+    return adj_list, adj_gK
+
+
+
 train = False
 n_networks = 500
 # n_instances = 10
 timeslots = 200
 if train:
-    # algolist = ['DGCN-LGS']
-    algolist = ['Greedy', 'DGCN-LGS']
+    # algolist = ['GCNr-Dist']
+    algolist = ['Greedy', 'CGCN-TSS']
 else:
-    # algolist = ['Greedy', 'DGCN-LGS']
-    algoname = 'DGCN-LGS'
-    algolist = ['Greedy', 'DGCN-LGS', 'Benchmark']
-    if flags.FLAGS.opt == 0:
-        algoname = 'DGCN-LGS'
-    elif flags.FLAGS.opt == 1:
-        algoname = 'DGCN-LGS-it'
-        algolist = [algoname]
-    elif flags.FLAGS.opt == 2 or flags.FLAGS.opt == 4:
-        algoname = 'DGCN-RS'
-        algolist = [algoname]
-    elif flags.FLAGS.opt == 3:
-        algoname = 'CGCN-CGS'
-        algolist = [algoname]
-    else:
-        sys.exit("Unsupported opt {}".format(flags.FLAGS.opt))
-
+    # algolist = ['Greedy', 'GCNr-Dist']
+    # algolist = ['Greedy', 'CGCN-TSS', 'Benchmark']
+    algolist = ['CGCN-TSS']
 sim_area = 250
 sim_node = 100
 sim_rc = 1
@@ -98,21 +164,12 @@ wt_sel = flags.FLAGS.wt_sel
 
 output_dir = flags.FLAGS.output
 output_csv = os.path.join(output_dir,
-                          'metric_vs_load_summary_{}-channel_utility-{}_opt-{}_load-{:.1f}-{:.1f}.csv'
-                          .format(n_ch, wt_sel, flags.FLAGS.opt, load_min, load_max)
+                          'metric_vs_load_summary_{}-channel_utility-{}_load-{:.1f}-{:.1f}_flood_rollout.csv'
+                          .format(n_ch, wt_sel, load_min, load_max)
                           )
 
 res_list = []
-res_df = pd.DataFrame(columns=['graph',
-                               'seed',
-                               'load',
-                               'name',
-                               'avg_queue_len',
-                               '50p_queue_len',
-                               '95p_queue_len',
-                               '5p_queue_len',
-                               'avg_utility',
-                               'avg_degree'])
+res_df = pd.DataFrame(columns=['graph', 'seed', 'load', 'name', 'avg_queue_len', 'med_queue_len', 'avg_utility', 'avg_degree'])
 if os.path.isfile(output_csv):
     res_df = pd.read_csv(output_csv, index_col=0)
 
@@ -141,9 +198,10 @@ wts_sample_file = os.path.join(output_dir, 'samples.txt')
 
 load_array = np.round(np.arange(load_min, load_max+load_step, load_step), 2)
 # load = load_array[np.random.randint(0, len(load_array) - 1)]
+load = 0.85
 
 buffer = deque(maxlen=20)
-for idx in range(0, len(val_mat_names[0:20])):
+for idx in range(0, len(val_mat_names)):
     mat_contents = sio.loadmat(os.path.join(datapath, val_mat_names[idx]))
     gdict = mat_contents['gdict'][0, 0]
     seed = mat_contents['random_seed'][0, 0]
@@ -162,19 +220,12 @@ for idx in range(0, len(val_mat_names[0:20])):
     avg_degree = np.nanmean(d_list)
 
     i = 0
-    # for i in range(1, n_instances+1):
-    for i in range(0, load_array.size):
-        load = load_array[i]
+    for i in range(1, n_instances+1):
+    # for load in load_array:
+        # treeseed = int(1000 * time.time()) % 10000000
         treeseed = i
         np.random.seed(treeseed)
         # np.random.seed(i)
-        skip = 0
-        for index, row in res_df.iterrows():
-            if row["graph"] == seed and row["seed"] == treeseed:
-                skip = 1
-                break
-        if skip:
-            continue
 
         arrival_rate = 0.5 * (sim_rate_lo + sim_rate_hi) * load
 
@@ -248,24 +299,7 @@ for idx in range(0, len(val_mat_names[0:20])):
                     mwis, total_wt, _ = mlp_gurobi(adj_gK, wts_dict[algo])
                     # mwis, total_wt = greedy_search(adj_gK, wts1)
                     util_mtx_dict[algo][t] = 1.0
-                elif algo == 'DGCN-LGS-it':
-                    wts_dict[algo] = wts1
-                    mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
-                    mwis, total_wt = dqn_agent.solve_mwis_dit(adj_gK, wts_dict[algo], train=train, grd=total_wt0)
-                    util_mtx_dict[algo][t] = total_wt / total_wt0
-                elif algo == 'DGCN-RS':
-                    wts_dict[algo] = wts1
-                    mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
-                    mwis, total_wt = dqn_agent.solve_mwis_rollout_wrap(adj_gK, wts_dict[algo], train=train,
-                                                                       grd=total_wt0)
-                    util_mtx_dict[algo][t] = total_wt / total_wt0
-                elif algo == 'CGCN-CGS':
-                    wts_dict[algo] = wts1
-                    mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
-                    mwis, total_wt = dqn_agent.solve_mwis_cgs_train(adj_gK, wts_dict[algo], train=train,
-                                                                    grd=total_wt0)
-                    util_mtx_dict[algo][t] = total_wt / total_wt0
-                elif algo == 'DGCN-LGS':
+                elif algo == 'GCNr-Dist':
                     # weight_samples += list(wts)
                     # wts0 = queue_mtx_dict[algo][:, t] + link_rates[:, t]
                     # wts0 = np.minimum(queue_mtx_dict[algo][:, t], link_rates[:, t])**1.5
@@ -279,8 +313,28 @@ for idx in range(0, len(val_mat_names[0:20])):
                     mwis, total_wt = dqn_agent.solve_mwis(adj_gK, wts_dict[algo], train=train, grd=total_wt0)
                     # mwis, total_wt, reward = dqn_agent.solve_mwis(adj, wts, train=train)
                     util_mtx_dict[algo][t] = total_wt/total_wt0
+                elif algo == 'DGCN-LGS-it':
+                    wts_dict[algo] = wts1
+                    mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
+                    mwis, total_wt = dqn_agent.solve_mwis_dit(adj_gK, wts_dict[algo], train=train, grd=total_wt0)
+                    util_mtx_dict[algo][t] = total_wt / total_wt0
+                elif algo == 'DGCN-RS':
+                    wts_dict[algo] = wts1
+                    mwis0, total_wt0, _ = mlp_gurobi(adj_gK, wts1)
+                    mwis, total_wt = dqn_agent.solve_mwis_rollout_wrap(adj_gK, wts_dict[algo], train=train, grd=total_wt0)
+                    util_mtx_dict[algo][t] = total_wt / total_wt0
+                elif algo == 'CGCN-TSS':
+                    wts_dict[algo] = wts1
+                    # wts = emv(wts0, wts)
+                    # wts_dict[algo] = emv(wts0, wts_dict[algo])
+                    # mwis0, total_wt0 = local_greedy_search(adj, wts_dict[algo])
+                    # mwis0, total_wt0 = greedy_search(adj_gK, wts1)
+                    mwis0, total_wt0,_ = mlp_gurobi(adj_gK, wts1)
+                    mwis, total_wt = rollout_agent.solve_mwis_iterative(adj_gK, wts_dict[algo])
+                    # mwis, total_wt, reward = dqn_agent.solve_mwis(adj, wts, train=train)
+                    util_mtx_dict[algo][t] = total_wt/total_wt0
                 else:
-                    sys.exit("Unsupported opt {}".format(flags.FLAGS.opt))
+                    assert(1==2)
 
                 schedule_mv = np.array(list(mwis))
                 link_rates_ts = np.reshape(link_rates[t, :, :], nflows*n_ch, order='F')
@@ -296,20 +350,15 @@ for idx in range(0, len(val_mat_names[0:20])):
 
         avg_q_dict = {}
         med_q_dict = {}
-        pct_q_dict = {}
-        pct2_q_dict = {}
         for algo in algolist:
             avg_queue_length_ts = np.mean(queue_mtx_dict[algo], axis=1)
             med_queue_length_ts = np.median(queue_mtx_dict[algo], axis=1)
-            pct_q_dict[algo] = np.percentile(queue_mtx_dict[algo], 95)
-            pct2_q_dict[algo] = np.percentile(queue_mtx_dict[algo], 5)
             avg_queue_len_links = np.mean(queue_mtx_dict[algo], axis=0)
-            # pct_tpt = np.percentile(queue_mtx_dict[algo].flatten(), 50)
+            # pct_queue_len = np.percentile(queue_mtx.flatten(), 90)
+            # pct_tpt = np.percentile(dep_pkts.flatten(), 90)
             # avg_tpt = np.mean(dep_pkts.flatten())
             avg_q_dict[algo] = np.mean(avg_queue_length_ts)
             med_q_dict[algo] = np.mean(med_queue_length_ts)
-            # pct_q_dict[algo] = np.mean(pct_queue_length_ts)
-            # pct2_q_dict[algo] = np.mean(pct2_queue_length_ts)
             # avg_q_dict[algo] = np.mean(avg_queue_length_ts)
             std_flow_q = np.std(avg_queue_len_links)
 
@@ -327,21 +376,19 @@ for idx in range(0, len(val_mat_names[0:20])):
                                     'load': load,
                                     'name': algo,
                                     'avg_queue_len': avg_q_dict[algo],
-                                    '50p_queue_len': med_q_dict[algo],
-                                    '95p_queue_len': pct_q_dict[algo],
-                                    '5p_queue_len': pct2_q_dict[algo],
+                                    'med_queue_len': med_q_dict[algo],
                                     'avg_utility': np.nanmean(util_mtx_dict[algo]),
                                     'avg_degree': avg_degree
                                     }, ignore_index=True)
         res_df.to_csv(output_csv)
         # with open(wts_sample_file,'a') as f:
         #     f.write('{}'.format(weight_samples))
-        if train:
-            loss = dqn_agent.replay(199)
-            if loss is None:
-                loss = 1.0
-            if not np.isnan(loss):
-                dqn_agent.save(model_origin)
+        # if train:
+        #     loss = dqn_agent.replay(199)
+        #     if loss is None:
+        #         loss = 1.0
+        #     if not np.isnan(loss):
+        #         dqn_agent.save(model_origin)
         # else:
         #     dqn_agent.load(model_origin)
         #
@@ -350,38 +397,42 @@ for idx in range(0, len(val_mat_names[0:20])):
         if train:
             # buffer.append(avg_util/greedy_avg_u)
             if wt_sel=='random':
-                buffer.append(np.mean(util_mtx_dict[algoname]))
+                buffer.append(np.mean(util_mtx_dict['GCNr-Dist']))
             else:
-                buffer.append(avg_q_dict[algoname]/avg_q_dict['Greedy'])
+                # buffer.append(avg_q_dict['GCNr-Dist']/avg_q_dict['Greedy'])
+                buffer.append(avg_q_dict['CGCN-TSS'] / avg_q_dict['Greedy'])
             print("{}-{}: {}, load: {}, ".format(idx, i, netcfg, load),
-                "q_median: {:.3f}, ".format(med_q_dict[algoname]/med_q_dict['Greedy']),
-                "q_mean: {:.3f}, ".format(avg_q_dict[algoname]/avg_q_dict['Greedy']),
-                # "q_median: {:.3f}, ".format(med_q_dict[algoname]/med_q_dict['Benchmark']),
-                # "q_mean: {:.3f}, ".format(avg_q_dict[algoname]/avg_q_dict['Benchmark']),
+                # "q_median: {:.3f}, ".format(med_q_dict['GCNr-Dist']/med_q_dict['Greedy']),
+                # "q_mean: {:.3f}, ".format(avg_q_dict['GCNr-Dist']/avg_q_dict['Greedy']),
+                "q_median: {:.3f}, ".format(med_q_dict['CGCN-TSS']/med_q_dict['Greedy']),
+                "q_mean: {:.3f}, ".format(avg_q_dict['CGCN-TSS']/avg_q_dict['Greedy']),
+                # "q_median: {:.3f}, ".format(med_q_dict['GCNr-Dist']/med_q_dict['Benchmark']),
+                # "q_mean: {:.3f}, ".format(avg_q_dict['GCNr-Dist']/avg_q_dict['Benchmark']),
                 # "q_pct: {:.3f}, ".format(pct_queue_len/greedy_pct_q),
                 # "t_avg: {:.3f}, ".format(avg_tpt/greedy_avg_t),
                 "u_gdy: {:.3f}, ".format(np.mean(util_mtx_dict['Greedy'])),
-                "u_gcn: {:.3f}, ".format(np.mean(util_mtx_dict[algoname])),
+                # "u_gcn: {:.3f}, ".format(np.mean(util_mtx_dict['GCNr-Dist'])),
+                "u_gcn: {:.3f}, ".format(np.mean(util_mtx_dict['CGCN-TSS'])),
                 "run: {:.3f}s, loss: {:.5f}, ratio: {:.3f}, ".format(runtime, loss, np.mean(buffer)),
-                "e: {:.4f}, m_val: {:.4f}, m_len: {}".format(dqn_agent.epsilon, np.mean(dqn_agent.reward_mem), len(dqn_agent.reward_mem))
+                # "e: {:.4f}, m_val: {:.4f}, m_len: {}".format(rollout_agent.epsilon, np.mean(rollout_agent.reward_mem), len(rollout_agent.reward_mem))
                 )
-        # else:
-        #     print("{}: {}, load: {}, ".format(i, netcfg, load),
-        #         "q_median: {:.3f}, ".format(med_q_dict[algoname]/med_q_dict['Greedy']),
-        #         "q_mean: {:.3f}, ".format(avg_q_dict[algoname]/avg_q_dict['Greedy']),
-        #         "q_median: {:.3f}, ".format(med_q_dict[algoname]/med_q_dict['Benchmark']),
-        #         "q_mean: {:.3f}, ".format(avg_q_dict[algoname]/avg_q_dict['Benchmark']),
-        #         # "q_pct: {:.3f}, ".format(pct_queue_len/greedy_pct_q),
-        #         # "t_avg: {:.3f}, ".format(avg_tpt/greedy_avg_t),
-        #         "u_gdy: {:.3f}, ".format(np.mean(util_mtx_dict['Greedy'])),
-        #         "u_gcn: {:.3f}, ".format(np.mean(util_mtx_dict[algoname])),
-        #         "run: {:.3f}".format(runtime)
-        #         # "runtime: {:.3f}, loss: {:.5f}, ratio: {:.3f}, ".format(runtime, loss, np.mean(buffer)),
-        #         # "epsilon: {:.4f}, mem_val: {:.4f}, mem_len: {}".format(dqn_agent.epsilon, np.mean(dqn_agent.reward_mem), len(dqn_agent.reward_mem))
-        #         )
+        else:
+            print("{}: {}, load: {}, ".format(i, netcfg, load),
+                "q_median: {:.3f}, ".format(med_q_dict['CGCN-TSS']),
+                "q_mean: {:.3f}, ".format(avg_q_dict['CGCN-TSS']),
+                # "q_median: {:.3f}, ".format(med_q_dict['CGCN-TSS']/med_q_dict['Benchmark']),
+                # "q_mean: {:.3f}, ".format(avg_q_dict['CGCN-TSS']/avg_q_dict['Benchmark']),
+                # "q_pct: {:.3f}, ".format(pct_queue_len/greedy_pct_q),
+                # "t_avg: {:.3f}, ".format(avg_tpt/greedy_avg_t),
+                # "u_gdy: {:.3f}, ".format(np.mean(util_mtx_dict['Greedy'])),
+                "u_gcn: {:.3f}, ".format(np.mean(util_mtx_dict['CGCN-TSS'])),
+                "run: {:.3f}".format(runtime)
+                # "runtime: {:.3f}, loss: {:.5f}, ratio: {:.3f}, ".format(runtime, loss, np.mean(buffer)),
+                # "epsilon: {:.4f}, mem_val: {:.4f}, mem_len: {}".format(dqn_agent.epsilon, np.mean(dqn_agent.reward_mem), len(dqn_agent.reward_mem))
+                )
         # print("{}, load: {}, avg_queue: {:.3f}, greedy_q_avg: {:.3f}, avg_util: {:.3f}, runtime: {:.3f}"
-        #     .format(netcfg, load, avg_q_dict[algoname], avg_q_dict['Greedy'], np.mean(util_mtx_dict[algoname]), runtime))
-        i += 1
+        #     .format(netcfg, load, avg_q_dict['GCNr-Dist'], avg_q_dict['Greedy'], np.mean(util_mtx_dict['GCNr-Dist']), runtime))
+        # i += 1
 
 
     # np.savetxt('./instance_209_q_gdy.csv', res_list[explen * i]['queue'], delimiter=',')

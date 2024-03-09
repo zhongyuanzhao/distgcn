@@ -116,6 +116,195 @@ def local_greedy_search(adj, wts):
     return mwis, total_ws
 
 
+def local_greedy_search_count(adj, wts):
+    '''
+    Return MWIS set and the total weights of MWIS and steps it takes
+    :param adj: adjacency matrix (sparse)
+    :param wts: weights of vertices
+    :return: mwis, total_wt, step
+    '''
+    wts = np.array(wts).flatten()
+    verts = np.array(range(wts.size))
+    mwis = set()
+    remain = set(verts.flatten())
+    vidx = list(remain)
+    nb_is = set()
+    step = 0
+    while len(remain) > 0:
+        for v in remain:
+            # if v in nb_is:
+            #     continue
+            _, nb_set = np.nonzero(adj[v])
+            nb_set = set(nb_set).intersection(remain)
+            if len(nb_set) == 0:
+                mwis.add(v)
+                continue
+            nb_list = list(nb_set)
+            nb_list.sort()
+            wts_nb = wts[nb_list]
+            w_bar_v = wts_nb.max()
+            if wts[v] > w_bar_v:
+                mwis.add(v)
+                nb_is = nb_is.union(set(nb_set))
+            elif wts[v] == w_bar_v:
+                i = list(wts_nb).index(wts[v])
+                nbv = nb_list[i]
+                if v < nbv:
+                    mwis.add(v)
+                    nb_is = nb_is.union(set(nb_set))
+            else:
+                pass
+        remain = remain - mwis - nb_is
+        step += 1
+    total_ws = np.sum(wts[list(mwis)])
+    return mwis, total_ws, step
+
+
+def local_greedy_search_stats(adj, wts):
+    '''
+    Return MWIS set and the total weights of MWIS and steps it takes
+    :param adj: adjacency matrix (sparse)
+    :param wts: weights of vertices
+    :return: mwis, total_wt, step
+    '''
+    wts = np.array(wts).flatten()
+    verts = np.array(range(wts.size))
+    mwis = set()
+    remain = set(verts.flatten())
+    vidx = list(remain)
+    nb_is = set()
+    step = 0
+    p2p = 0
+    bst = 0
+    while len(remain) > 0:
+        bst += len(remain)
+        for v in remain:
+            # if v in nb_is:
+            #     continue
+            _, nb_set = np.nonzero(adj[v])
+            nb_set = set(nb_set).intersection(remain)
+            p2p += len(nb_set)
+            if len(nb_set) == 0:
+                mwis.add(v)
+                continue
+            nb_list = list(nb_set)
+            nb_list.sort()
+            wts_nb = wts[nb_list]
+            w_bar_v = wts_nb.max()
+            if wts[v] > w_bar_v:
+                mwis.add(v)
+                nb_is = nb_is.union(set(nb_set))
+            elif wts[v] == w_bar_v:
+                i = list(wts_nb).index(wts[v])
+                nbv = nb_list[i]
+                if v < nbv:
+                    mwis.add(v)
+                    nb_is = nb_is.union(set(nb_set))
+            else:
+                pass
+        remain = remain - mwis - nb_is
+        step += 1
+    total_ws = np.sum(wts[list(mwis)])
+    bst += len(list(mwis))
+    return mwis, total_ws, step, p2p, bst
+
+
+def local_greedy_search_overhead(adj, wts):
+    '''
+    Return MWIS set and the total weights of MWIS and steps it takes
+    :param adj: adjacency matrix (sparse)
+    :param wts: weights of vertices
+    :return: mwis, total_wt, step
+    '''
+    wts = np.array(wts).flatten()
+    verts = np.array(range(wts.size))
+    mwis = set()
+    overheads = {}
+    oh_vec = np.zeros_like(wts)
+    remain = set(verts.flatten())
+    vidx = list(remain)
+    nb_is = set()
+    step = 0
+    p2p = 0
+    bst = 0
+    while len(remain) > 0:
+        bst += len(remain)
+        for v in remain:
+            # if v in nb_is:
+            #     continue
+            _, nb_set = np.nonzero(adj[v])
+            nb_set = set(nb_set).intersection(remain)
+            p2p += len(nb_set)
+            oh_vec[v] += len(nb_set)
+            if len(nb_set) == 0:
+                mwis.add(v)
+                continue
+            nb_list = list(nb_set)
+            nb_list.sort()
+            wts_nb = wts[nb_list]
+            w_bar_v = wts_nb.max()
+            if wts[v] > w_bar_v:
+                mwis.add(v)
+                nb_is = nb_is.union(set(nb_set))
+                oh_vec[v] += 1 # mute signaling
+            elif wts[v] == w_bar_v:
+                i = list(wts_nb).index(wts[v])
+                nbv = nb_list[i]
+                if v < nbv:
+                    mwis.add(v)
+                    nb_is = nb_is.union(set(nb_set))
+                    oh_vec[v] += 1  # mute signaling
+            else:
+                pass
+        remain = remain - mwis - nb_is
+        step += 1
+    total_ws = np.sum(wts[list(mwis)])
+    bst += len(list(mwis))
+    return mwis, total_ws, step, p2p, bst, oh_vec
+
+
+def local_greedy_search_nstep(adj, wts, nstep=1):
+    '''
+    Return MWIS set and the total weights of MWIS
+    :param adj: adjacency matrix (sparse)
+    :param wts: weights of vertices
+    :return: mwis, total_wt
+    '''
+    wts = np.array(wts).flatten()
+    verts = np.array(range(wts.size))
+    mwis = set()
+    remain = set(verts.flatten())
+    vidx = list(remain)
+    nb_is = set()
+    step = nstep
+    while len(remain) > 0 and step:
+        for v in remain:
+            _, nb_set = np.nonzero(adj[v])
+            nb_set = set(nb_set).intersection(remain)
+            if len(nb_set) == 0:
+                mwis.add(v)
+                continue
+            nb_list = list(nb_set)
+            nb_list.sort()
+            wts_nb = wts[nb_list]
+            w_bar_v = wts_nb.max()
+            if wts[v] > w_bar_v:
+                mwis.add(v)
+                nb_is = nb_is.union(set(nb_set))
+            elif wts[v] == w_bar_v:
+                i = list(wts_nb).index(wts[v])
+                nbv = nb_list[i]
+                if v < nbv:
+                    mwis.add(v)
+                    nb_is = nb_is.union(set(nb_set))
+            else:
+                pass
+        remain = remain - mwis - nb_is
+        step -= 1
+    total_ws = np.sum(wts[list(mwis)])
+    return mwis, total_ws, nb_is
+
+
 def get_all_mis(adj):
     # G = ig.Graph()
     # G.Read_Adjacency(adj)
