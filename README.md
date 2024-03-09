@@ -48,6 +48,8 @@ _Key words_: Maximum weighted independent set; graph convolutional network; wire
 ## Instructions for replicate numerical experiments
 The recommended system setup is Ubuntu linux 20.04LTS.
 
+The [old instructions](https://github.com/zhongyuanzhao/distgcn/blob/icassp2021/README.md) are also helpful, but not repeated here.
+
 Training script `./bash/twc_train_gcn_gdpg.sh`
 
 Test on graphs `./bash/twc_test_gdpg_500graphs.sh `
